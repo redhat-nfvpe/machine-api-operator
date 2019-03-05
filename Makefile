@@ -16,7 +16,7 @@ ifeq ($(NO_DOCKER), 1)
   DOCKER_CMD =
   IMAGE_BUILD_CMD = imagebuilder
 else
-  DOCKER_CMD := docker run --rm -v "$(PWD)":/go/src/github.com/openshift/machine-api-operator:Z -w /go/src/github.com/openshift/machine-api-operator golang:1.10
+  DOCKER_CMD := docker run --rm -v "$(PWD)":/go/src/github.com/redhat-nfvpe/machine-api-operator:Z -w /go/src/github.com/redhat-nfvpe/machine-api-operator golang:1.10
   IMAGE_BUILD_CMD = docker build
 endif
 
@@ -52,8 +52,20 @@ build-integration: ## Build integration test binary
 	mkdir -p bin
 	$(DOCKER_CMD) go build $(GOGCFLAGS) -o bin/integration github.com/openshift/machine-api-operator/test/integration
 
-test-e2e:
-	go run ./vendor/github.com/openshift/cluster-api-actuator-pkg/pkg/e2e/openshift/*.go -alsologtostderr
+.PHONY: test-e2e
+test-e2e: ## Run openshift specific e2e test
+	go test -timeout 60m \
+		-v ./vendor/github.com/openshift/cluster-api-actuator-pkg/pkg/e2e \
+		-kubeconfig $${KUBECONFIG:-~/.kube/config} \
+		-machine-api-namespace $${NAMESPACE:-openshift-machine-api} \
+		-ginkgo.v \
+		-args -v 5 -logtostderr true
+
+.PHONY: deploy-kubemark
+deploy-kubemark:
+	kustomize build config | kubectl apply -f -
+	kustomize build | kubectl apply -f -
+	kubectl apply -f config/kubemark-install-config.yaml
 
 .PHONY: test
 test: ## Run tests
